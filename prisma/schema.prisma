@@ -1,0 +1,189 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─── Enums ─────────────────────────────────────────────
+
+enum Role {
+  STUDENT
+  MENTOR
+  ADMIN
+}
+
+enum ClassroomRole {
+  STUDENT
+  MENTOR
+}
+
+// ─── User ──────────────────────────────────────────────
+
+model User {
+  id           String   @id @default(cuid())
+  name         String
+  email        String   @unique
+  passwordHash String
+  role         Role     @default(STUDENT)
+  avatar       String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relations
+  classroomsCreated    Classroom[]       @relation("ClassroomCreator")
+  classroomMemberships ClassroomMember[]
+  videosUploaded       Video[]
+  notesUploaded        Note[]
+  messagesSent         Message[]
+
+  @@index([email])
+  @@index([role])
+  @@map("users")
+}
+
+// ─── Classroom ─────────────────────────────────────────
+
+model Classroom {
+  id          String   @id @default(cuid())
+  title       String
+  description String?
+  inviteCode  String   @unique @default(cuid())
+  createdById String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  createdBy User              @relation("ClassroomCreator", fields: [createdById], references: [id], onDelete: Cascade)
+  members   ClassroomMember[]
+  videos    Video[]
+  notes     Note[]
+  messages  Message[]
+  invites   Invite[]
+
+  @@index([createdById])
+  @@index([inviteCode])
+  @@map("classrooms")
+}
+
+// ─── ClassroomMember (Join Table) ──────────────────────
+
+model ClassroomMember {
+  id          String        @id @default(cuid())
+  classroomId String
+  userId      String
+  role        ClassroomRole @default(STUDENT)
+  joinedAt    DateTime      @default(now())
+
+  // Relations
+  classroom Classroom @relation(fields: [classroomId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([classroomId, userId])
+  @@index([classroomId])
+  @@index([userId])
+  @@map("classroom_members")
+}
+
+// ─── Video ─────────────────────────────────────────────
+
+model Video {
+  id           String   @id @default(cuid())
+  classroomId  String
+  title        String
+  description  String?
+  videoUrl     String
+  storageKey   String?
+  thumbnailUrl String?
+  duration     Float?
+  fileSize     Int?
+  mimeType     String?
+  uploadedById String
+  createdAt    DateTime @default(now())
+
+  // Relations
+  classroom  Classroom       @relation(fields: [classroomId], references: [id], onDelete: Cascade)
+  uploadedBy User            @relation(fields: [uploadedById], references: [id], onDelete: Cascade)
+  questions  VideoQuestion[]
+
+  @@index([classroomId])
+  @@index([uploadedById])
+  @@map("videos")
+}
+
+// ─── VideoQuestion (Timestamped Quiz) ──────────────────
+
+model VideoQuestion {
+  id            String   @id @default(cuid())
+  videoId       String
+  timestamp     Float
+  question      String
+  options       Json
+  correctAnswer Int
+  explanation   String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relations
+  video Video @relation(fields: [videoId], references: [id], onDelete: Cascade)
+
+  @@index([videoId, timestamp])
+  @@map("video_questions")
+}
+
+// ─── Note ──────────────────────────────────────────────
+
+model Note {
+  id           String   @id @default(cuid())
+  classroomId  String
+  title        String
+  content      String?  @db.Text
+  fileUrl      String?
+  uploadedById String
+  createdAt    DateTime @default(now())
+
+  // Relations
+  classroom  Classroom @relation(fields: [classroomId], references: [id], onDelete: Cascade)
+  uploadedBy User      @relation(fields: [uploadedById], references: [id], onDelete: Cascade)
+
+  @@index([classroomId])
+  @@index([uploadedById])
+  @@map("notes")
+}
+
+// ─── Message (Chat) ────────────────────────────────────
+
+model Message {
+  id          String   @id @default(cuid())
+  classroomId String
+  senderId    String
+  content     String   @db.Text
+  createdAt   DateTime @default(now())
+
+  // Relations
+  classroom Classroom @relation(fields: [classroomId], references: [id], onDelete: Cascade)
+  sender    User      @relation(fields: [senderId], references: [id], onDelete: Cascade)
+
+  @@index([classroomId, createdAt])
+  @@index([senderId])
+  @@map("messages")
+}
+
+// ─── Invite ────────────────────────────────────────────
+
+model Invite {
+  id          String    @id @default(cuid())
+  classroomId String
+  inviteCode  String    @unique
+  expiresAt   DateTime?
+  createdAt   DateTime  @default(now())
+
+  // Relations
+  classroom Classroom @relation(fields: [classroomId], references: [id], onDelete: Cascade)
+
+  @@index([inviteCode])
+  @@index([classroomId])
+  @@map("invites")
+}
